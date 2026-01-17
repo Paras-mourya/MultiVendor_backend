@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 # Install ALL dependencies (including dev) to run build scripts if needed
-RUN npm ci
+RUN npm install
 
 COPY . .
 
@@ -19,7 +19,7 @@ ENV NODE_ENV=production
 COPY package*.json ./
 
 # Install ONLY production dependencies and clean cache
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 # Copy source code and necessary files
 COPY --from=builder /app/src ./src
