@@ -5,6 +5,12 @@ import uploadRoutes from './upload.routes.js';
 import adminRoutes from './admin.routes.js';
 import contentRoutes from './content.routes.js';
 import faqRoutes from './faq.routes.js';
+import productCategoryRoutes from './productCategory.routes.js';
+import productSubCategoryRoutes from './productSubCategory.routes.js';
+import newsletterRoutes from './newsletter.routes.js';
+import blogCategoryRoutes from './blogCategory.routes.js';
+import blogRoutes from './blog.routes.js';
+import publicBlogRoutes from './publicBlog.routes.js';
 
 const router = express.Router();
 
@@ -17,6 +23,12 @@ router.use('/admin/auth', adminRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/content', contentRoutes);
 router.use('/faqs', faqRoutes);
+router.use('/categories', productCategoryRoutes);
+router.use('/subcategories', productSubCategoryRoutes);
+router.use('/blog-categories', blogCategoryRoutes);
+router.use('/blogs', blogRoutes);
+router.use('/public/blogs', publicBlogRoutes);
+router.use('/newsletter', newsletterRoutes);
 
 // Health check can also be versioned if needed, but usually kept root
 router.use('/health', healthRoutes);
