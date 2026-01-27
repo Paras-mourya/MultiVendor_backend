@@ -133,6 +133,34 @@ export const logout = async (req, res) => {
   res.status(HTTP_STATUS.OK).json(new ApiResponse(HTTP_STATUS.OK, {}, SUCCESS_MESSAGES.LOGOUT_SUCCESS));
 };
 
+/**
+ * @desc    Get Current Customer Profile
+ * @route   GET /api/v1/customers/me
+ * @access  Private
+ */
+export const getMe = async (req, res) => {
+  Logger.info(`getMe request for customer: ${req.customer?._id}`);
+  const customer = await CustomerService.getProfile(req.customer._id);
+  
+  res.status(HTTP_STATUS.OK).json(
+    new ApiResponse(HTTP_STATUS.OK, customer, SUCCESS_MESSAGES.OPERATION_SUCCESS)
+  );
+};
+
+/**
+ * @desc    Update Customer Profile
+ * @route   PATCH /api/v1/customers/profile
+ * @access  Private
+ */
+export const updateProfile = async (req, res) => {
+  Logger.info(`updateProfile request for customer: ${req.customer?._id}`);
+  const customer = await CustomerService.updateProfile(req.customer._id, req.body);
+  
+  res.status(HTTP_STATUS.OK).json(
+    new ApiResponse(HTTP_STATUS.OK, customer, 'Profile updated successfully')
+  );
+};
+
 export default {
   signup,
   verifyOtp,
@@ -142,4 +170,6 @@ export default {
   forgotPassword,
   verifyResetOtp,
   resetPassword,
+  getMe,
+  updateProfile,
 };

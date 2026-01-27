@@ -59,6 +59,13 @@ const resetPassword = z.object({
   }),
 });
 
+const updateProfile = z.object({
+  body: z.object({
+    name: z.string().min(2).max(50).trim().optional(),
+    phoneNumber: z.string().regex(/^[6-9]\d{9}$/, 'Invalid phone number').optional(),
+  }),
+});
+
 export default {
   signup,
   verifyOtp,
@@ -67,4 +74,5 @@ export default {
   forgotPassword,
   verifyResetOtp,
   resetPassword,
+  updateProfile,
 };

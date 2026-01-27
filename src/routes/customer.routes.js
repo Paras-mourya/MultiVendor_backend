@@ -27,6 +27,29 @@ router.post(
   CustomerController.logout
 );
 
+/**
+ * @desc    Get Current Customer Profile
+ * @route   GET /api/v1/customers/me
+ * @access  Private
+ */
+router.get(
+  '/me',
+  protectCustomer,
+  CustomerController.getMe
+);
+
+/**
+ * @desc    Update Customer Profile
+ * @route   PATCH /api/v1/customers/profile
+ * @access  Private
+ */
+router.patch(
+  '/profile',
+  protectCustomer,
+  validate(CustomerValidation.updateProfile),
+  CustomerController.updateProfile
+);
+
 router.post(
   '/signup',
   authLimiter,

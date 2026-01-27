@@ -296,6 +296,43 @@ class CustomerService {
     });
   }
 
+  /**
+   * Get Customer Profile
+   */
+  async getProfile(customerId) {
+    Logger.info(`Fetching profile for customer: ${customerId}`);
+    const customer = await CustomerRepository.findById(customerId);
+    if (!customer) {
+      throw new AppError('Customer not found', HTTP_STATUS.NOT_FOUND);
+    }
+    return customer;
+  }
+
+  /**
+   * Update Customer Profile
+   */
+  async updateProfile(customerId, updateData) {
+    Logger.info(`Updating profile for customer: ${customerId}`, { updateData });
+    
+    // Prevent updating sensitive fields via this method
+    const allowedFields = ['name', 'phoneNumber'];
+    const filteredUpdate = {};
+    Object.keys(updateData).forEach(key => {
+      if (allowedFields.includes(key)) {
+        filteredUpdate[key] = updateData[key];
+      }
+    });
+
+    const customer = await CustomerRepository.updateById(customerId, filteredUpdate);
+    
+    if (!customer) {
+      throw new AppError('Customer not found', HTTP_STATUS.NOT_FOUND);
+    }
+
+    AuditLogger.log('CUSTOMER_PROFILE_UPDATED', 'CUSTOMER', { customerId: customer._id });
+    return customer;
+  }
+
   generateTokens(customer) {
     const version = customer.tokenVersion || 0;
     return {

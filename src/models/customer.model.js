@@ -23,6 +23,21 @@ const customerSchema = new mongoose.Schema(
       minlength: [8, 'Password must be at least 8 characters'],
       select: false,
     },
+    phoneNumber: {
+      type: String,
+      match: [/^[6-9]\d{9}$/, 'Please add a valid phone number'],
+      trim: true,
+    },
+    photo: {
+      url: {
+        type: String,
+        default: null,
+      },
+      publicId: {
+        type: String,
+        default: null,
+      },
+    },
     role: {
       type: String,
       enum: Object.values(ROLES),
