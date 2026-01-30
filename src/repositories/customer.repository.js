@@ -8,20 +8,26 @@ class CustomerRepository {
     return Array.isArray(customerData) ? docs : docs[0];
   }
 
-  async findByEmail(email, selectFields = '') {
+  async findByEmail(email, selectFields = '', lean = false) {
     Logger.debug(`DB: Finding customer by email: ${email}`);
     const query = Customer.findOne({ email });
     if (selectFields) {
       query.select(selectFields);
     }
+    if (lean) {
+      query.lean();
+    }
     return await query;
   }
 
-  async findById(id, selectFields = '') {
+  async findById(id, selectFields = '', lean = false) {
     Logger.debug(`DB: Finding customer by ID: ${id}`);
     const query = Customer.findById(id);
     if (selectFields) {
       query.select(selectFields);
+    }
+    if (lean) {
+      query.lean();
     }
     return await query;
   }
@@ -31,11 +37,14 @@ class CustomerRepository {
     return await Customer.findByIdAndUpdate(id, updateData, options);
   }
 
-  async findOne(filter, selectFields = '') {
+  async findOne(filter, selectFields = '', lean = false) {
     Logger.debug('DB: Finding customer with filter', { filter });
     const query = Customer.findOne(filter);
     if (selectFields) {
       query.select(selectFields);
+    }
+    if (lean) {
+      query.lean();
     }
     return await query;
   }

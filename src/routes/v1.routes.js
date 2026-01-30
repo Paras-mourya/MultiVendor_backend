@@ -17,6 +17,10 @@ import reliabilityRoutes from './reliability.routes.js';
 import trustedByRoutes from './trustedBy.routes.js';
 import socialMediaRoutes from './socialMedia.routes.js';
 import customerRoutes from './customer.routes.js';
+import vendorRoutes from './vendor.routes.js';
+import supplierEmailTemplateRoutes from './supplierEmailTemplate.routes.js';
+import customerEmailTemplateRoutes from './customerEmailTemplate.routes.js';
+import adminEmailTemplateRoutes from './adminEmailTemplate.routes.js';
 
 const router = express.Router();
 
@@ -41,6 +45,10 @@ router.use('/company-reliability', reliabilityRoutes);
 router.use('/trusted-by', trustedByRoutes);
 router.use('/social-media', socialMediaRoutes);
 router.use('/customers', customerRoutes);
+router.use('/vendors', vendorRoutes);
+router.use('/admin/supplier-template', supplierEmailTemplateRoutes);
+router.use('/admin/customer-template', customerEmailTemplateRoutes);
+router.use('/admin/admin-template', adminEmailTemplateRoutes);
 
 // Health check can also be versioned if needed, but usually kept root
 router.use('/health', healthRoutes);

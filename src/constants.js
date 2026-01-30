@@ -95,6 +95,15 @@ export const ROLES = {
   ADMIN: 'admin',
   MANAGER: 'manager',
   CUSTOMER: 'customer',
+  VENDOR: 'vendor',
+};
+
+// Vendor Status
+export const VENDOR_STATUS = {
+  PENDING: 'pending',
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+  REJECTED: 'rejected',
 };
 
 // Task Status

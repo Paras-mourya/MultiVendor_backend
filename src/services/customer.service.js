@@ -22,7 +22,7 @@ class CustomerService {
       Logger.info(`Starting customer signup process for: ${email}`);
 
       // 1. Check if customer already exists
-      const existingCustomer = await CustomerRepository.findByEmail(email);
+      const existingCustomer = await CustomerRepository.findByEmail(email, '', true);
       if (existingCustomer) {
         Logger.warn(`Signup failed: Email already exists - ${email}`);
         throw new AppError(ERROR_MESSAGES.DUPLICATE_RESOURCE, HTTP_STATUS.CONFLICT);
@@ -44,7 +44,7 @@ class CustomerService {
 
       // 4. Send verification email
       try {
-        await EmailService.sendVerificationEmail(email, verificationCode);
+        await EmailService.sendVerificationEmail(email, verificationCode, 'customer');
         Logger.info(`Signup verification email sent to: ${email}`);
       } catch (error) {
         Logger.error('Signup Verification Email Delivery Failed', { 
@@ -120,7 +120,7 @@ class CustomerService {
       throw new AppError('Either account is already verified or not found.', HTTP_STATUS.BAD_REQUEST);
     }
 
-    await EmailService.sendVerificationEmail(email, verificationCode);
+    await EmailService.sendVerificationEmail(email, verificationCode, 'customer');
 
     return {
       message: 'Verification code resent successfully.'
@@ -233,7 +233,7 @@ class CustomerService {
       }
     );
 
-    await EmailService.sendPasswordResetOtpEmail(email, resetCode);
+    await EmailService.sendPasswordResetOtpEmail(email, resetCode, 'customer');
 
     AuditLogger.log('CUSTOMER_FORGOT_PASSWORD_REQUESTED', 'CUSTOMER', { customerId: customer._id });
 
@@ -301,7 +301,7 @@ class CustomerService {
    */
   async getProfile(customerId) {
     Logger.info(`Fetching profile for customer: ${customerId}`);
-    const customer = await CustomerRepository.findById(customerId);
+    const customer = await CustomerRepository.findById(customerId, '', true);
     if (!customer) {
       throw new AppError('Customer not found', HTTP_STATUS.NOT_FOUND);
     }
@@ -331,6 +331,65 @@ class CustomerService {
 
     AuditLogger.log('CUSTOMER_PROFILE_UPDATED', 'CUSTOMER', { customerId: customer._id });
     return customer;
+  }
+
+  /**
+   * Update Customer Status (Block/Unblock)
+   */
+  async updateStatus(customerId, isActive) {
+    Logger.info(`Updating status for customer: ${customerId} to ${isActive ? 'Active' : 'Blocked'}`);
+    
+    const customer = await CustomerRepository.updateById(customerId, { isActive });
+    
+    if (!customer) {
+      throw new AppError('Customer not found', HTTP_STATUS.NOT_FOUND);
+    }
+
+    // Trigger Dynamic Emails
+    try {
+      const event = isActive ? 'Account Unblocked' : 'Account Blocked';
+      await EmailService.sendEmailTemplate(customer.email, event, { username: customer.name }, 'customer');
+    } catch (error) {
+      Logger.error(`Failed to send customer status update email`, { customerId, isActive, error: error.message });
+    }
+
+    AuditLogger.log(`CUSTOMER_ACCOUNT_${isActive ? 'UNBLOCKED' : 'BLOCKED'}`, 'ADMIN', { customerId });
+    return customer;
+  }
+
+  /**
+   * Get All Customers (for Admin)
+   */
+  async getAllCustomers(page = 1, limit = 10, search = '', status) {
+    const skip = (page - 1) * limit;
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phoneNumber: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    if (status !== undefined) {
+      query.isActive = status === 'active';
+    }
+
+    const customers = await Customer.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await Customer.countDocuments(query);
+
+    return {
+      customers,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
   }
 
   generateTokens(customer) {
