@@ -189,6 +189,22 @@ vendorSchema.methods.matchPassword = async function (enteredPassword) {
   return await comparePassword(this.password, enteredPassword);
 };
 
+// Cascade Delete: Remove all vendor products when vendor is deleted
+vendorSchema.pre('findOneAndDelete', async function (next) {
+  try {
+    const vendorId = this.getQuery()._id;
+    
+    // Delete all products belonging to this vendor
+    const Product = mongoose.model('Product');
+    await Product.deleteMany({ vendor: vendorId });
+    
+    console.log(`Cascade delete: Removed all products for vendor ${vendorId}`);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 const Vendor = mongoose.model('Vendor', vendorSchema);
 
 export default Vendor;
