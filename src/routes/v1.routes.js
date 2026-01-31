@@ -34,6 +34,8 @@ import loginSettingRoutes from './loginSetting.routes.js';
 import systemSettingRoutes from './systemSetting.routes.js';
 
 import cookieConsentRoutes from './cookieConsent.routes.js';
+import productAttributeRoutes from './productAttribute.routes.js';
+import productRoutes from './product.routes.js';
 
 const router = express.Router();
 
@@ -74,6 +76,8 @@ router.use('/google-map-apis', googleMapRoutes);
 router.use('/login-settings', loginSettingRoutes);
 router.use('/system-settings', systemSettingRoutes);
 router.use('/cookie-consent', cookieConsentRoutes);
+router.use('/product-attributes', productAttributeRoutes);
+router.use('/products', productRoutes);
 
 // Health check can also be versioned if needed, but usually kept root
 router.use('/health', healthRoutes);
