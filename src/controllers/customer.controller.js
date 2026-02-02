@@ -14,8 +14,8 @@ import Logger from '../utils/logger.js';
  */
 export const login = async (req, res) => {
   Logger.info(`Login attempt for email: ${req.body.email}`);
-  const { email, password } = req.body;
-  const { customer, accessToken, refreshToken } = await CustomerService.login(email, password);
+  const { email, password, guestId } = req.body;
+  const { customer, accessToken, refreshToken } = await CustomerService.login(email, password, guestId);
 
   const settings = await SystemSettingRepository.getSettings();
   const isProduction = settings.appMode === 'Live';
@@ -40,7 +40,7 @@ export const login = async (req, res) => {
 export const signup = async (req, res) => {
   Logger.info(`Signup request received for email: ${req.body.email}`);
   const result = await CustomerService.signup(req.body);
-  
+
   res.status(HTTP_STATUS.CREATED).json(
     new ApiResponse(HTTP_STATUS.CREATED, result, 'Verification code sent to your email.')
   );
@@ -55,7 +55,7 @@ export const verifyOtp = async (req, res) => {
   Logger.info(`OTP verification request for: ${req.body.email}`);
   const { email, code } = req.body;
   const result = await CustomerService.verifyOtp(email, code);
-  
+
   res.status(HTTP_STATUS.OK).json(
     new ApiResponse(HTTP_STATUS.OK, result, SUCCESS_MESSAGES.OPERATION_SUCCESS)
   );
@@ -70,7 +70,7 @@ export const resendOtp = async (req, res) => {
   Logger.info(`Resend OTP request for: ${req.body.email}`);
   const { email } = req.body;
   const result = await CustomerService.resendOtp(email);
-  
+
   res.status(HTTP_STATUS.OK).json(
     new ApiResponse(HTTP_STATUS.OK, result, 'Verification code resent.')
   );
@@ -85,7 +85,7 @@ export const resendOtp = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   const { email } = req.body;
   const result = await CustomerService.forgotPassword(email);
-  
+
   res.status(HTTP_STATUS.OK).json(
     new ApiResponse(HTTP_STATUS.OK, result, result.message)
   );
@@ -99,7 +99,7 @@ export const forgotPassword = async (req, res) => {
 export const verifyResetOtp = async (req, res) => {
   const { email, code } = req.body;
   const result = await CustomerService.verifyResetOtp(email, code);
-  
+
   res.status(HTTP_STATUS.OK).json(
     new ApiResponse(HTTP_STATUS.OK, result, result.message)
   );
@@ -113,7 +113,7 @@ export const verifyResetOtp = async (req, res) => {
 export const resetPassword = async (req, res) => {
   const { email, code, newPassword } = req.body;
   const result = await CustomerService.resetPassword(email, code, newPassword);
-  
+
   res.status(HTTP_STATUS.OK).json(
     new ApiResponse(HTTP_STATUS.OK, result, result.message)
   );
@@ -148,7 +148,7 @@ export const logout = async (req, res) => {
 export const getMe = async (req, res) => {
   Logger.info(`getMe request for customer: ${req.customer?._id}`);
   const customer = await CustomerService.getProfile(req.customer._id);
-  
+
   res.status(HTTP_STATUS.OK).json(
     new ApiResponse(HTTP_STATUS.OK, customer, SUCCESS_MESSAGES.OPERATION_SUCCESS)
   );
@@ -162,7 +162,7 @@ export const getMe = async (req, res) => {
 export const updateProfile = async (req, res) => {
   Logger.info(`updateProfile request for customer: ${req.customer?._id}`);
   const customer = await CustomerService.updateProfile(req.customer._id, req.body);
-  
+
   res.status(HTTP_STATUS.OK).json(
     new ApiResponse(HTTP_STATUS.OK, customer, 'Profile updated successfully')
   );

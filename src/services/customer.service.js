@@ -9,6 +9,7 @@ import AuditLogger from '../utils/audit.js';
 import TransactionManager from '../utils/transaction.js';
 import Logger from '../utils/logger.js';
 import LoginSettingRepository from '../repositories/loginSetting.repository.js';
+import CartService from './cart.service.js';
 
 class CustomerService {
   /**
@@ -169,7 +170,7 @@ class CustomerService {
   /**
    * Customer Login (Account Lockout Logic)
    */
-  async login(email, password) {
+  async login(email, password, guestId = null) {
     const customer = await Customer.findOne({ email }).select('+password +loginAttempts +lockUntil');
 
     if (!customer) {
@@ -233,6 +234,21 @@ class CustomerService {
 
     // Fetch updated version for token
     const updatedCustomer = await Customer.findById(customer._id);
+
+    // 4. Merge guest cart if guestId provided
+    if (guestId) {
+      try {
+        await CartService.mergeGuestCart(guestId, updatedCustomer._id);
+        Logger.info('Guest cart merged on login', { customerId: updatedCustomer._id, guestId });
+      } catch (error) {
+        Logger.error('Failed to merge guest cart on login', {
+          customerId: updatedCustomer._id,
+          guestId,
+          error: error.message
+        });
+        // Don't fail login if cart merge fails
+      }
+    }
 
     AuditLogger.log('CUSTOMER_LOGIN', 'CUSTOMER', { customerId: customer._id });
 
