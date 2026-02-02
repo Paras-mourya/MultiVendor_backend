@@ -10,12 +10,12 @@ export const convertToCSV = (data, headers) => {
 
   // Create header row
   const headerRow = headers.map(h => `"${h.label}"`).join(',');
-  
+
   // Create data rows
   const dataRows = data.map(item => {
     return headers.map(h => {
       let value = h.key.split('.').reduce((obj, key) => obj?.[key], item);
-      
+
       // Handle different data types
       if (value === null || value === undefined) {
         value = '';
@@ -24,7 +24,7 @@ export const convertToCSV = (data, headers) => {
       } else {
         value = String(value);
       }
-      
+
       // Escape quotes and wrap in quotes
       return `"${value.replace(/"/g, '""')}"`;
     }).join(',');
@@ -53,4 +53,20 @@ export const productCSVHeaders = [
   { label: 'Brand', key: 'brand' },
   { label: 'Created At', key: 'createdAt' },
   { label: 'Updated At', key: 'updatedAt' },
+];
+
+export const couponCSVHeaders = [
+  { label: 'Coupon ID', key: '_id' },
+  { label: 'Title', key: 'title' },
+  { label: 'Code', key: 'code' },
+  { label: 'Type', key: 'type' },
+  { label: 'Discount Type', key: 'discountType' },
+  { label: 'Discount Amount', key: 'discountAmount' },
+  { label: 'Min Purchase', key: 'minPurchase' },
+  { label: 'Limit/User', key: 'limitForSameUser' },
+  { label: 'Start Date', key: 'startDate' },
+  { label: 'Expire Date', key: 'expireDate' },
+  { label: 'Status', key: 'isActive' },
+  { label: 'Total Used', key: 'totalUsed' },
+  { label: 'Created At', key: 'createdAt' }
 ];

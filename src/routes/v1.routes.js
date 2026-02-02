@@ -36,6 +36,8 @@ import systemSettingRoutes from './systemSetting.routes.js';
 import cookieConsentRoutes from './cookieConsent.routes.js';
 import productAttributeRoutes from './productAttribute.routes.js';
 import productRoutes from './product.routes.js';
+import couponRoutes from './coupon.routes.js';
+import clearanceSaleRoutes from './clearanceSale.routes.js';
 
 const router = express.Router();
 
@@ -78,6 +80,8 @@ router.use('/system-settings', systemSettingRoutes);
 router.use('/cookie-consent', cookieConsentRoutes);
 router.use('/product-attributes', productAttributeRoutes);
 router.use('/products', productRoutes);
+router.use('/coupons', couponRoutes);
+router.use('/clearance-sale', clearanceSaleRoutes);
 
 // Health check can also be versioned if needed, but usually kept root
 router.use('/health', healthRoutes);

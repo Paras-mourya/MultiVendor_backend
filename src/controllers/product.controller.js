@@ -70,6 +70,14 @@ class ProductController {
         return res.status(HTTP_STATUS.OK).json(new ApiResponse(HTTP_STATUS.OK, products, SUCCESS_MESSAGES.FETCHED));
     };
 
+    searchVendorProducts = async (req, res) => {
+        const query = req.query.q || req.query.search || '';
+        const limit = parseInt(req.query.limit) || 20;
+
+        const products = await ProductService.searchVendorProducts(req.vendor._id, query, limit);
+        return res.status(HTTP_STATUS.OK).json(new ApiResponse(HTTP_STATUS.OK, products, SUCCESS_MESSAGES.FETCHED));
+    };
+
     getProductById = async (req, res) => {
         // Check if it's a public request or vendor request based on route or user
         // Ideally create separate method for clarity, but reusing route structure.

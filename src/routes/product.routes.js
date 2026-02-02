@@ -142,6 +142,9 @@ router.get('/stats/dashboard', ProductController.getVendorProductStats);
 // Vendor Export Products
 router.get('/export/csv', ProductController.exportVendorProducts);
 
+// Vendor Isolated Search (for selection/internal use)
+router.get('/vendor/search', ProductController.searchVendorProducts);
+
 // --- Bulk Import Routes ---
 import { uploadExcel } from '../utils/multer.js';
 

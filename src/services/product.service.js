@@ -5,6 +5,7 @@ import AppError from '../utils/AppError.js';
 import { HTTP_STATUS } from '../constants.js';
 import Cache from '../utils/cache.js';
 import Logger from '../utils/logger.js';
+import ClearanceSaleService from './clearanceSale.service.js';
 import crypto from 'crypto';
 
 const PRODUCT_CACHE_KEY = 'products';
@@ -235,7 +236,12 @@ class ProductService {
         };
         const filter = query.filter ? { ...defaultFilter, ...query.filter } : defaultFilter;
 
-        return await ProductRepository.findAll(filter, query.sort, query.page, query.limit);
+        const result = await ProductRepository.findAll(filter, query.sort, query.page, query.limit);
+
+        // Enrich with clearance sale info
+        result.products = await ClearanceSaleService.enrichProductsWithSales(result.products);
+
+        return result;
     }
 
     async searchProducts(searchQuery, limit = 20) {
@@ -251,12 +257,11 @@ class ProductService {
             quantity: { $gt: 0 },
             search: searchQuery.trim()
         };
-
         // Use repository but limit fields returned
         const result = await ProductRepository.findAll(filter, { createdAt: -1 }, 1, limit);
 
         // Return lightweight data for search suggestions
-        return result.products.map(p => ({
+        const products = result.products.map(p => ({
             _id: p._id,
             name: p.name,
             price: p.price,
@@ -266,6 +271,34 @@ class ProductService {
             slug: p.slug,
             category: p.category?.name,
             vendor: p.vendor?.businessName || 'Admin' // Default to Admin
+        }));
+
+        // Enrich with clearance sale info (optional for autocomplete, but good for consistent pricing)
+        return await ClearanceSaleService.enrichProductsWithSales(products);
+    }
+
+    async searchVendorProducts(vendorId, searchQuery, limit = 20) {
+        // Isolated search for vendor specifically (e.g. for selecting products for a sale)
+        if (!searchQuery || searchQuery.trim().length < 1) {
+            return [];
+        }
+
+        const filter = {
+            vendor: vendorId,
+            search: searchQuery.trim()
+        };
+
+        const result = await ProductRepository.findAll(filter, { createdAt: -1 }, 1, limit);
+
+        return result.products.map(p => ({
+            _id: p._id,
+            name: p.name,
+            price: p.price,
+            sku: p.sku,
+            thumbnail: p.thumbnail,
+            quantity: p.quantity,
+            status: p.status,
+            isActive: p.isActive
         }));
     }
 
@@ -290,7 +323,8 @@ class ProductService {
             product.variations = product.variations.filter(v => v.stock > 0);
         }
 
-        return product;
+        // Enrich with clearance sale info
+        return await ClearanceSaleService.enrichProductsWithSales(product);
     }
 
     async getSimilarProducts(productId, limit = 10) {
@@ -323,7 +357,9 @@ class ProductService {
         };
 
         const result = await ProductRepository.findAll(filter, { createdAt: -1 }, 1, limit);
-        return result.products;
+
+        // Enrich with clearance sale info
+        return await ClearanceSaleService.enrichProductsWithSales(result.products);
     }
 
     async updateProduct(id, data, vendorId) {
@@ -808,7 +844,9 @@ class ProductService {
         };
 
         const result = await ProductRepository.findAll(filter, { createdAt: -1 }, 1, limit);
-        return result.products;
+
+        // Enrich with clearance sale info
+        return await ClearanceSaleService.enrichProductsWithSales(result.products);
     }
 
     async deleteProduct(id, vendorId) {
