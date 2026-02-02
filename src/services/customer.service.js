@@ -278,22 +278,39 @@ class CustomerService {
    * Forgot Password - Step 1: Send OTP
    */
   async forgotPassword(email) {
-    const customer = await Customer.findOne({ email });
+    const loginSettings = await LoginSettingRepository.getSettings();
+    const resendTimeSec = loginSettings.otpResendTime;
+
+    const customer = await Customer.findOne({ email }).select('+updatedAt');
 
     if (!customer) {
       throw new AppError("Account not found with this email.", HTTP_STATUS.NOT_FOUND);
     }
 
+    // Check resend cooldown (if OTP was sent recently)
+    if (customer.verificationCodeExpires && customer.verificationCodeExpires > Date.now()) {
+      const lastUpdate = new Date(customer.updatedAt).getTime();
+      const now = Date.now();
+      const cooldownMs = resendTimeSec * 1000;
+
+      if (now - lastUpdate < cooldownMs) {
+        const waitTime = Math.ceil((cooldownMs - (now - lastUpdate)) / 1000);
+        throw new AppError(`Please wait ${waitTime} seconds before requesting a new OTP.`, HTTP_STATUS.TOO_MANY_REQUESTS);
+      }
+    }
+
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
     const resetCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Atomic update reset code
+    // Atomic update reset code and reset OTP attempts
     await Customer.updateOne(
       { _id: customer._id },
       {
         $set: {
           verificationCode: resetCode,
-          verificationCodeExpires: resetCodeExpires
+          verificationCodeExpires: resetCodeExpires,
+          otpAttempts: 0,
+          otpLockUntil: undefined
         }
       }
     );
@@ -311,15 +328,56 @@ class CustomerService {
    * Forgot Password - Step 2: Verify OTP
    */
   async verifyResetOtp(email, code) {
-    const customer = await Customer.findOne({
-      email,
-      verificationCode: code,
-      verificationCodeExpires: { $gt: Date.now() }
-    });
+    const loginSettings = await LoginSettingRepository.getSettings();
+    const maxOtpHit = loginSettings.maxOtpHit;
+    const blockTime = loginSettings.temporaryBlockTime * 1000;
+
+    const customer = await Customer.findOne({ email }).select('+verificationCode +verificationCodeExpires +otpAttempts +otpLockUntil');
 
     if (!customer) {
-      throw new AppError('Invalid or expired verification code.', HTTP_STATUS.BAD_REQUEST);
+      throw new AppError('Account not found.', HTTP_STATUS.NOT_FOUND);
     }
+
+    // 1. Check if OTP is locked
+    if (customer.otpLockUntil && customer.otpLockUntil > Date.now()) {
+      const remainingTime = Math.ceil((customer.otpLockUntil - Date.now()) / (60 * 1000));
+      throw new AppError(`Too many failed attempts. Please try again in ${remainingTime} minutes.`, HTTP_STATUS.FORBIDDEN);
+    }
+
+    // 2. Verify Code
+    const isCodeValid = customer.verificationCode === code && customer.verificationCodeExpires > Date.now();
+
+    if (!isCodeValid) {
+      const updatedAttempts = (customer.otpAttempts || 0) + 1;
+      const isLocked = updatedAttempts >= maxOtpHit;
+
+      await Customer.updateOne(
+        { _id: customer._id },
+        {
+          $inc: { otpAttempts: 1 },
+          $set: {
+            otpLockUntil: isLocked ? Date.now() + blockTime : undefined
+          }
+        }
+      );
+
+      AuditLogger.security('CUSTOMER_RESET_OTP_FAILED', { email });
+
+      const remaining = maxOtpHit - updatedAttempts;
+      const message = remaining > 0
+        ? `Invalid or expired code. ${remaining} attempts remaining.`
+        : `Too many failed attempts. Account locked for ${loginSettings.temporaryBlockTime / 3600} hours.`;
+
+      throw new AppError(message, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    // 3. Success - Reset OTP attempts
+    await Customer.updateOne(
+      { _id: customer._id },
+      {
+        $set: { otpAttempts: 0, otpLockUntil: undefined }
+      }
+    );
 
     return {
       message: 'OTP verified. You can now reset your password.'
