@@ -8,6 +8,7 @@ import Logger from '../utils/logger.js';
 import ClearanceSaleService from './clearanceSale.service.js';
 import FlashDealService from './flashDeal.service.js';
 import FeaturedDealService from './featuredDeal.service.js';
+import DealOfTheDayService from './dealOfTheDay.service.js';
 import { deleteMultipleImages } from '../utils/imageUpload.util.js';
 import crypto from 'crypto';
 
@@ -250,6 +251,9 @@ class ProductService {
         // Enrich with Featured Deals
         result.products = await FeaturedDealService.enrichProductsWithFeaturedDeals(result.products);
 
+        // Enrich with Deal of the Day
+        result.products = await DealOfTheDayService.enrichProductsWithDailyDeals(result.products);
+
         return result;
     }
 
@@ -290,6 +294,9 @@ class ProductService {
 
         // Enrich with Featured Deals
         enriched = await FeaturedDealService.enrichProductsWithFeaturedDeals(enriched);
+
+        // Enrich with Deal of the Day
+        enriched = await DealOfTheDayService.enrichProductsWithDailyDeals(enriched);
 
         return enriched;
     }
@@ -663,6 +670,7 @@ class ProductService {
         result.products = await ClearanceSaleService.enrichProductsWithSales(result.products);
         result.products = await FlashDealService.enrichProductsWithFlashDeals(result.products);
         result.products = await FeaturedDealService.enrichProductsWithFeaturedDeals(result.products);
+        result.products = await DealOfTheDayService.enrichProductsWithDailyDeals(result.products);
 
         return result;
     }

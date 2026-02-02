@@ -43,6 +43,8 @@ import flashDealRoutes from './flashDeal.routes.js';
 import adminFlashDealRoutes from './adminFlashDeal.routes.js';
 import featuredDealRoutes from './featuredDeal.routes.js';
 import adminFeaturedDealRoutes from './adminFeaturedDeal.routes.js';
+import dealOfTheDayRoutes from './dealOfTheDay.routes.js';
+import adminDealOfTheDayRoutes from './adminDealOfTheDay.routes.js';
 
 const router = express.Router();
 
@@ -92,6 +94,8 @@ router.use('/flash-deals', flashDealRoutes);
 router.use('/admin/flash-deals', adminFlashDealRoutes);
 router.use('/featured-deals', featuredDealRoutes);
 router.use('/admin/featured-deals', adminFeaturedDealRoutes);
+router.use('/deal-of-the-day', dealOfTheDayRoutes);
+router.use('/admin/deal-of-the-day', adminDealOfTheDayRoutes);
 
 // Health check can also be versioned if needed, but usually kept root
 router.use('/health', healthRoutes);
