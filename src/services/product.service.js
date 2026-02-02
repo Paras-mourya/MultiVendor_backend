@@ -6,6 +6,8 @@ import { HTTP_STATUS } from '../constants.js';
 import Cache from '../utils/cache.js';
 import Logger from '../utils/logger.js';
 import ClearanceSaleService from './clearanceSale.service.js';
+import FlashDealService from './flashDeal.service.js';
+import { deleteMultipleImages } from '../utils/imageUpload.util.js';
 import crypto from 'crypto';
 
 const PRODUCT_CACHE_KEY = 'products';
@@ -241,6 +243,9 @@ class ProductService {
         // Enrich with clearance sale info
         result.products = await ClearanceSaleService.enrichProductsWithSales(result.products);
 
+        // Enrich with Flash Deals
+        result.products = await FlashDealService.enrichProductsWithFlashDeals(result.products);
+
         return result;
     }
 
@@ -274,7 +279,12 @@ class ProductService {
         }));
 
         // Enrich with clearance sale info (optional for autocomplete, but good for consistent pricing)
-        return await ClearanceSaleService.enrichProductsWithSales(products);
+        let enriched = await ClearanceSaleService.enrichProductsWithSales(products);
+
+        // Enrich with Flash Deals
+        enriched = await FlashDealService.enrichProductsWithFlashDeals(enriched);
+
+        return enriched;
     }
 
     async searchVendorProducts(vendorId, searchQuery, limit = 20) {
@@ -324,7 +334,10 @@ class ProductService {
         }
 
         // Enrich with clearance sale info
-        return await ClearanceSaleService.enrichProductsWithSales(product);
+        const withClearance = await ClearanceSaleService.enrichProductsWithSales(product);
+
+        // Enrich with Flash Deal info
+        return await FlashDealService.enrichProductsWithFlashDeals(withClearance);
     }
 
     async getSimilarProducts(productId, limit = 10) {
@@ -359,7 +372,10 @@ class ProductService {
         const result = await ProductRepository.findAll(filter, { createdAt: -1 }, 1, limit);
 
         // Enrich with clearance sale info
-        return await ClearanceSaleService.enrichProductsWithSales(result.products);
+        const withClearance = await ClearanceSaleService.enrichProductsWithSales(result.products);
+
+        // Enrich with Flash Deal info
+        return await FlashDealService.enrichProductsWithFlashDeals(withClearance);
     }
 
     async updateProduct(id, data, vendorId) {
@@ -456,7 +472,31 @@ class ProductService {
             data.quantity = data.variations.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0);
         }
 
+        const imagesToDelete = [];
+
+        // If images updated, find which ones were removed
+        if (data.images) {
+            const oldPublicIds = product.images.map(img => img.publicId).filter(id => id);
+            const newPublicIds = data.images.map(img => img.publicId).filter(id => id);
+            const toPurge = oldPublicIds.filter(id => !newPublicIds.includes(id));
+            imagesToDelete.push(...toPurge);
+        }
+
+        // If thumbnail updated
+        if (data.thumbnail && product.thumbnail?.publicId && data.thumbnail.publicId !== product.thumbnail.publicId) {
+            imagesToDelete.push(product.thumbnail.publicId);
+        }
+
+        // If SEO meta image updated
+        if (data.seo?.metaImage && product.seo?.metaImage?.publicId && data.seo.metaImage.publicId !== product.seo.metaImage.publicId) {
+            imagesToDelete.push(product.seo.metaImage.publicId);
+        }
+
         const updated = await ProductRepository.update(id, data);
+
+        if (imagesToDelete.length > 0) {
+            await deleteMultipleImages(imagesToDelete);
+        }
         await this.invalidateCache();
         return updated;
     }
@@ -580,7 +620,29 @@ class ProductService {
             data.quantity = data.variations.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0);
         }
 
+        const imagesToDelete = [];
+
+        if (data.images) {
+            const oldPublicIds = product.images.map(img => img.publicId).filter(id => id);
+            const newPublicIds = data.images.map(img => img.publicId).filter(id => id);
+            const toPurge = oldPublicIds.filter(id => !newPublicIds.includes(id));
+            imagesToDelete.push(...toPurge);
+        }
+
+        if (data.thumbnail && product.thumbnail?.publicId && data.thumbnail.publicId !== product.thumbnail.publicId) {
+            imagesToDelete.push(product.thumbnail.publicId);
+        }
+
+        if (data.seo?.metaImage && product.seo?.metaImage?.publicId && data.seo.metaImage.publicId !== product.seo.metaImage.publicId) {
+            imagesToDelete.push(product.seo.metaImage.publicId);
+        }
+
         const updated = await ProductRepository.update(id, data);
+
+        if (imagesToDelete.length > 0) {
+            await deleteMultipleImages(imagesToDelete);
+        }
+
         await this.invalidateCache();
         return updated;
     }
@@ -683,7 +745,20 @@ class ProductService {
             throw new AppError('Product not found', HTTP_STATUS.NOT_FOUND, 'PRODUCT_NOT_FOUND');
         }
 
-        // TODO: cleanup images from Cloudinary
+        // Cleanup images from Cloudinary
+        const imagesToDelete = [];
+        if (product.thumbnail?.publicId) imagesToDelete.push(product.thumbnail.publicId);
+        if (product.images && product.images.length > 0) {
+            imagesToDelete.push(...product.images.map(img => img.publicId).filter(id => id));
+        }
+        if (product.variations && product.variations.length > 0) {
+            imagesToDelete.push(...product.variations.map(v => v.image?.publicId).filter(id => id));
+        }
+        if (product.seo?.metaImage?.publicId) imagesToDelete.push(product.seo.metaImage.publicId);
+
+        if (imagesToDelete.length > 0) {
+            await deleteMultipleImages(imagesToDelete);
+        }
 
         await ProductRepository.delete(id);
         await this.invalidateCache();
@@ -846,7 +921,10 @@ class ProductService {
         const result = await ProductRepository.findAll(filter, { createdAt: -1 }, 1, limit);
 
         // Enrich with clearance sale info
-        return await ClearanceSaleService.enrichProductsWithSales(result.products);
+        const withClearance = await ClearanceSaleService.enrichProductsWithSales(result.products);
+
+        // Enrich with Flash Deal info
+        return await FlashDealService.enrichProductsWithFlashDeals(withClearance);
     }
 
     async deleteProduct(id, vendorId) {
@@ -860,7 +938,20 @@ class ProductService {
             throw new AppError('Not authorized to delete this product', HTTP_STATUS.FORBIDDEN, 'FORBIDDEN_ACCESS');
         }
 
-        // TODO: cleanup images from Cloudinary
+        // Cleanup images from Cloudinary
+        const imagesToDelete = [];
+        if (product.thumbnail?.publicId) imagesToDelete.push(product.thumbnail.publicId);
+        if (product.images && product.images.length > 0) {
+            imagesToDelete.push(...product.images.map(img => img.publicId).filter(id => id));
+        }
+        if (product.variations && product.variations.length > 0) {
+            imagesToDelete.push(...product.variations.map(v => v.image?.publicId).filter(id => id));
+        }
+        if (product.seo?.metaImage?.publicId) imagesToDelete.push(product.seo.metaImage.publicId);
+
+        if (imagesToDelete.length > 0) {
+            await deleteMultipleImages(imagesToDelete);
+        }
 
         await ProductRepository.delete(id);
         await this.invalidateCache();
