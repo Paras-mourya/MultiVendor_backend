@@ -7,15 +7,29 @@ class ClearanceSaleRepository extends BaseRepository {
     }
 
     async findByVendor(vendorId) {
-        return await this.model.findOne({ vendor: vendorId }).populate('products.product');
+        return await this.model.findOne({ vendor: vendorId, isAdmin: false }).populate('products.product');
     }
 
-    async addProducts(vendorId, productIds) {
-        const productObjects = productIds.map(id => ({ product: id, isActive: true }));
+    async findAdminSale() {
+        return await this.model.findOne({ isAdmin: true }).populate('products.product');
+    }
 
-        // Use a loop or complex query because $addToSet with objects only works if the whole object is unique.
-        // We want to ensure the product ID is unique.
-        const sale = await this.model.findOne({ vendor: vendorId });
+    async findAllActive(limit = 10) {
+        const now = new Date();
+        return await this.model.find({
+            isActive: true,
+            startDate: { $lte: now },
+            expireDate: { $gte: now }
+        })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('products.product')
+            .lean();
+    }
+
+    async addProducts(vendorId, productIds, isAdmin = false) {
+        const query = isAdmin ? { isAdmin: true } : { vendor: vendorId, isAdmin: false };
+        const sale = await this.model.findOne(query);
         if (!sale) return null;
 
         productIds.forEach(id => {
@@ -28,17 +42,19 @@ class ClearanceSaleRepository extends BaseRepository {
         return await sale.save();
     }
 
-    async removeProduct(vendorId, productId) {
+    async removeProduct(vendorId, productId, isAdmin = false) {
+        const query = isAdmin ? { isAdmin: true } : { vendor: vendorId, isAdmin: false };
         return await this.model.findOneAndUpdate(
-            { vendor: vendorId },
+            query,
             { $pull: { products: { product: productId } } },
             { new: true }
         );
     }
 
-    async toggleProductStatus(vendorId, productId, isActive) {
+    async toggleProductStatus(vendorId, productId, isActive, isAdmin = false) {
+        const query = isAdmin ? { isAdmin: true, 'products.product': productId } : { vendor: vendorId, isAdmin: false, 'products.product': productId };
         return await this.model.findOneAndUpdate(
-            { vendor: vendorId, 'products.product': productId },
+            query,
             { $set: { 'products.$.isActive': isActive } },
             { new: true }
         );

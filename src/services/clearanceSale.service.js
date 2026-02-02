@@ -3,11 +3,16 @@ import ProductRepository from '../repositories/product.repository.js';
 import AppError from '../utils/AppError.js';
 import { HTTP_STATUS } from '../constants.js';
 import Cache from '../utils/cache.js';
+import { uploadImageFromUrl, deleteMultipleImages } from '../utils/imageUpload.util.js';
 
 class ClearanceSaleService {
 
     async getSaleConfig(vendorId) {
         return await ClearanceSaleRepository.findByVendor(vendorId);
+    }
+
+    async getAdminSaleConfig() {
+        return await ClearanceSaleRepository.findAdminSale();
     }
 
     async upsertSaleConfig(data, vendorId) {
@@ -20,18 +25,56 @@ class ClearanceSaleService {
 
         let existing = await ClearanceSaleRepository.findByVendor(vendorId);
 
-        // Prepare meta image handling if provided (assumed handled by controller/upload middleware -> url string)
+        // Handle meta image upload
+        if (data.metaImage && typeof data.metaImage === 'string') {
+            const upload = await uploadImageFromUrl(data.metaImage, 'clearance-sales/meta');
+            // If replacing, add old one to delete list
+            if (existing?.metaImage?.publicId) {
+                await deleteMultipleImages([existing.metaImage.publicId]);
+            }
+            data.metaImage = { url: upload.url, publicId: upload.publicId };
+        }
 
         let result;
         if (existing) {
             result = await ClearanceSaleRepository.update(existing._id, data);
         } else {
             data.vendor = vendorId;
-            // Default false if not provided, though schema has default
             result = await ClearanceSaleRepository.create(data);
         }
 
         await this.invalidateCache(vendorId);
+        return result;
+    }
+
+    async upsertAdminSaleConfig(data) {
+        if (data.startDate && data.expireDate) {
+            if (new Date(data.expireDate) <= new Date(data.startDate)) {
+                throw new AppError('Expire date must be after start date', HTTP_STATUS.BAD_REQUEST, 'INVALID_DATE_RANGE');
+            }
+        }
+
+        let existing = await ClearanceSaleRepository.findAdminSale();
+
+        // Handle meta image upload
+        if (data.metaImage && typeof data.metaImage === 'string') {
+            const upload = await uploadImageFromUrl(data.metaImage, 'admin/clearance-sales/meta');
+            if (existing?.metaImage?.publicId) {
+                await deleteMultipleImages([existing.metaImage.publicId]);
+            }
+            data.metaImage = { url: upload.url, publicId: upload.publicId };
+        }
+
+        let result;
+        if (existing) {
+            result = await ClearanceSaleRepository.update(existing._id, data);
+        } else {
+            data.isAdmin = true;
+            data.vendor = null;
+            result = await ClearanceSaleRepository.create(data);
+        }
+
+        await this.invalidateCache();
         return result;
     }
 
@@ -43,6 +86,17 @@ class ClearanceSaleService {
 
         const result = await ClearanceSaleRepository.update(existing._id, { isActive });
         await this.invalidateCache(vendorId);
+        return result;
+    }
+
+    async toggleAdminStatus(isActive) {
+        const existing = await ClearanceSaleRepository.findAdminSale();
+        if (!existing) {
+            throw new AppError('Clearance sale configuration not found', HTTP_STATUS.NOT_FOUND, 'SALE_NOT_FOUND');
+        }
+
+        const result = await ClearanceSaleRepository.update(existing._id, { isActive });
+        await this.invalidateCache();
         return result;
     }
 
@@ -76,12 +130,48 @@ class ClearanceSaleService {
         return result;
     }
 
+    async addAdminProducts(productIds) {
+        const sale = await ClearanceSaleRepository.findAdminSale();
+        if (!sale) {
+            throw new AppError('Please setup clearance sale configuration first', HTTP_STATUS.BAD_REQUEST, 'SETUP_REQUIRED');
+        }
+
+        // Verify products are in-house (vendor is null or undefined)
+        const count = await ProductRepository.count({
+            _id: { $in: productIds },
+            $or: [{ vendor: null }, { vendor: { $exists: false } }]
+        });
+
+        if (count !== productIds.length) {
+            throw new AppError('One or more products are not in-house (administered by you)', HTTP_STATUS.FORBIDDEN, 'INVALID_PRODUCTS');
+        }
+
+        const result = await ClearanceSaleRepository.addProducts(null, productIds, true);
+        await this.invalidateCache();
+        return result;
+    }
+
+    async removeAdminProduct(productId) {
+        const result = await ClearanceSaleRepository.removeProduct(null, productId, true);
+        await this.invalidateCache();
+        return result;
+    }
+
     async toggleProductStatus(productId, isActive, vendorId) {
         const result = await ClearanceSaleRepository.toggleProductStatus(vendorId, productId, isActive);
         if (!result) {
             throw new AppError('Product not found in clearance sale', HTTP_STATUS.NOT_FOUND, 'PRODUCT_NOT_FOUND');
         }
         await this.invalidateCache(vendorId);
+        return result;
+    }
+
+    async toggleAdminProductStatus(productId, isActive) {
+        const result = await ClearanceSaleRepository.toggleProductStatus(null, productId, isActive, true);
+        if (!result) {
+            throw new AppError('Product not found in clearance sale', HTTP_STATUS.NOT_FOUND, 'PRODUCT_NOT_FOUND');
+        }
+        await this.invalidateCache();
         return result;
     }
 
@@ -92,16 +182,11 @@ class ClearanceSaleService {
 
     async getPublicSales(limit = 10) {
         // Fetch all ACTIVE clearance sales where current date is within range
-        const now = new Date();
-        const result = await ClearanceSaleRepository.findAll({
-            isActive: true,
-            startDate: { $lte: now },
-            expireDate: { $gte: now }
-        }, { createdAt: -1 }, 1, limit);
+        // Includes both Vendor and Admin sales
+        const result = await ClearanceSaleRepository.findAllActive(limit);
 
         // We return everything. The frontend will check 'isActive' on each product 
         // within the sale to decide whether to show the "Clearance Price" or "Normal Price".
-        // This satisfies: "active h toh product pe sale dikhegi agr inactive h toh product dikhega lkn sale nhi rhegi"
 
         return result;
     }
@@ -112,30 +197,41 @@ class ClearanceSaleService {
         const isArray = Array.isArray(products);
         const productList = isArray ? products : [products];
 
-        // Get unique vendor IDs from the products
+        // Get unique vendor IDs and flag if there are admin products
         const vendorIds = [...new Set(productList.map(p => p.vendor?._id || p.vendor).filter(id => id))];
-        if (vendorIds.length === 0) return products;
+        const hasAdminProducts = productList.some(p => !p.vendor);
 
-        // Fetch active sales for these vendors
+        // Fetch active sales
         const now = new Date();
-        const activeSales = await ClearanceSaleRepository.model.find({
-            vendor: { $in: vendorIds },
+        const saleQuery = {
             isActive: true,
             startDate: { $lte: now },
-            expireDate: { $gte: now }
-        }).lean();
+            expireDate: { $gte: now },
+            $or: [
+                { vendor: { $in: vendorIds } },
+                { isAdmin: true }
+            ]
+        };
+
+        const activeSales = await ClearanceSaleRepository.model.find(saleQuery).lean();
 
         if (activeSales.length === 0) return products;
 
-        // Map sales by vendor for quick lookup
+        // Map sales
         const salesByVendor = {};
+        let adminSale = null;
+
         activeSales.forEach(sale => {
-            salesByVendor[sale.vendor.toString()] = sale;
+            if (sale.isAdmin) {
+                adminSale = sale;
+            } else if (sale.vendor) {
+                salesByVendor[sale.vendor.toString()] = sale;
+            }
         });
 
         productList.forEach(p => {
             const vendorId = (p.vendor?._id || p.vendor)?.toString();
-            const sale = salesByVendor[vendorId];
+            const sale = vendorId ? salesByVendor[vendorId] : adminSale;
 
             if (sale) {
                 // Check if product is in this sale and active
@@ -150,14 +246,11 @@ class ClearanceSaleService {
                         metaTitle: sale.metaTitle
                     };
 
-                    // Frontend logic helper: calculate sale price
                     if (sale.discountType === 'flat') {
                         p.salePrice = sale.discountAmount > 0
                             ? Math.max(0, p.price - (p.price * (sale.discountAmount / 100)))
                             : p.price;
                     }
-                    // If product_wise, the frontend/vendor might set it differently, 
-                    // but usually vendor sets a flat % for all clearance items in 'flat' mode.
                 }
             }
         });

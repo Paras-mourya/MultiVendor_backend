@@ -150,7 +150,10 @@ const productSchema = new mongoose.Schema(
         seo: {
             metaTitle: String,
             metaDescription: String,
-            metaImage: String,
+            metaImage: {
+                url: String,
+                publicId: String
+            },
         },
         status: {
             type: String,

@@ -3,6 +3,7 @@ import Customer from '../models/customer.model.js';
 import EmailService from './email.service.js';
 import AppError from '../utils/AppError.js';
 import { HTTP_STATUS, ERROR_MESSAGES } from '../constants.js';
+import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
 import { generateToken, generateRefreshToken } from '../utils/jwt.js';
 import AuditLogger from '../utils/audit.js';
 import TransactionManager from '../utils/transaction.js';
@@ -45,10 +46,10 @@ class CustomerService {
         await EmailService.sendVerificationEmail(email, verificationCode, 'customer');
         Logger.info(`Signup verification email sent to: ${email}`);
       } catch (error) {
-        Logger.error('Signup Verification Email Delivery Failed', { 
-          email, 
+        Logger.error('Signup Verification Email Delivery Failed', {
+          email,
           error: error.message,
-          stack: error.stack 
+          stack: error.stack
         });
       }
 
@@ -71,7 +72,7 @@ class CustomerService {
     const blockTime = loginSettings.temporaryBlockTime * 1000;
 
     const customer = await Customer.findOne({ email, isVerified: false }).select('+verificationCode +verificationCodeExpires +otpAttempts +otpLockUntil');
-    
+
     if (!customer) {
       throw new AppError('Account not found or already verified.', HTTP_STATUS.NOT_FOUND);
     }
@@ -88,19 +89,19 @@ class CustomerService {
     if (!isCodeValid) {
       const updatedAttempts = (customer.otpAttempts || 0) + 1;
       const isLocked = updatedAttempts >= maxOtpHit;
-      
+
       await Customer.updateOne(
         { _id: customer._id },
-        { 
+        {
           $inc: { otpAttempts: 1 },
-          $set: { 
-            otpLockUntil: isLocked ? Date.now() + blockTime : undefined 
+          $set: {
+            otpLockUntil: isLocked ? Date.now() + blockTime : undefined
           }
         }
       );
 
       const remaining = maxOtpHit - updatedAttempts;
-      const message = remaining > 0 
+      const message = remaining > 0
         ? `Invalid or expired code. ${remaining} attempts remaining.`
         : `Too many failed attempts. Account locked for OTP for ${loginSettings.temporaryBlockTime / 3600} hours.`;
 
@@ -150,11 +151,11 @@ class CustomerService {
 
     await Customer.updateOne(
       { _id: customer._id },
-      { 
-        $set: { 
-          verificationCode, 
-          verificationCodeExpires 
-        } 
+      {
+        $set: {
+          verificationCode,
+          verificationCodeExpires
+        }
       }
     );
 
@@ -170,7 +171,7 @@ class CustomerService {
    */
   async login(email, password) {
     const customer = await Customer.findOne({ email }).select('+password +loginAttempts +lockUntil');
-    
+
     if (!customer) {
       throw new AppError("Don't have an account? Please sign up.", HTTP_STATUS.UNAUTHORIZED);
     }
@@ -196,37 +197,37 @@ class CustomerService {
     }
 
     const isMatch = await customer.matchPassword(password);
-    
+
     if (!isMatch) {
       Logger.warn(`Login failed: Invalid password for account ${email}`);
       // 2. Increment failed attempts
       await Customer.updateOne(
         { _id: customer._id },
-        { 
+        {
           $inc: { loginAttempts: 1 },
-          $set: { 
-            lockUntil: customer.loginAttempts + 1 >= maxLoginHit ? Date.now() + blockTime : undefined 
+          $set: {
+            lockUntil: customer.loginAttempts + 1 >= maxLoginHit ? Date.now() + blockTime : undefined
           }
         }
       );
 
       AuditLogger.security('CUSTOMER_LOGIN_FAILED', { email });
-      
+
       const remaining = maxLoginHit - (customer.loginAttempts + 1);
-      const message = remaining > 0 
+      const message = remaining > 0
         ? `Wrong password. ${remaining} attempts remaining before lockout.`
         : `Too many failed attempts. Your account has been locked for ${loginSettings.temporaryLoginBlockTime / 3600} hours.`;
-        
+
       throw new AppError(message, HTTP_STATUS.UNAUTHORIZED);
     }
 
     // 3. Success - Reset attempts, update last login and increment tokenVersion for a fresh session
     await Customer.updateOne(
       { _id: customer._id },
-      { 
+      {
         $inc: { tokenVersion: 1 },
         $set: { lastLogin: new Date() },
-        $unset: { loginAttempts: 1, lockUntil: 1 } 
+        $unset: { loginAttempts: 1, lockUntil: 1 }
       }
     );
 
@@ -262,9 +263,9 @@ class CustomerService {
    */
   async forgotPassword(email) {
     const customer = await Customer.findOne({ email });
-    
+
     if (!customer) {
-       throw new AppError("Account not found with this email.", HTTP_STATUS.NOT_FOUND);
+      throw new AppError("Account not found with this email.", HTTP_STATUS.NOT_FOUND);
     }
 
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -273,11 +274,11 @@ class CustomerService {
     // Atomic update reset code
     await Customer.updateOne(
       { _id: customer._id },
-      { 
-        $set: { 
-          verificationCode: resetCode, 
-          verificationCodeExpires: resetCodeExpires 
-        } 
+      {
+        $set: {
+          verificationCode: resetCode,
+          verificationCodeExpires: resetCodeExpires
+        }
       }
     );
 
@@ -294,10 +295,10 @@ class CustomerService {
    * Forgot Password - Step 2: Verify OTP
    */
   async verifyResetOtp(email, code) {
-    const customer = await Customer.findOne({ 
-      email, 
-      verificationCode: code, 
-      verificationCodeExpires: { $gt: Date.now() } 
+    const customer = await Customer.findOne({
+      email,
+      verificationCode: code,
+      verificationCodeExpires: { $gt: Date.now() }
     });
 
     if (!customer) {
@@ -316,17 +317,17 @@ class CustomerService {
     return await TransactionManager.execute(async (session) => {
       // Using atomic update pattern to ensure OTP is consumed only once
       const customer = await Customer.findOneAndUpdate(
-        { 
-          email, 
-          verificationCode: code, 
-          verificationCodeExpires: { $gt: Date.now() } 
+        {
+          email,
+          verificationCode: code,
+          verificationCodeExpires: { $gt: Date.now() }
         },
-        { 
+        {
           $unset: { verificationCode: 1, verificationCodeExpires: 1 },
           $inc: { tokenVersion: 1 }, // Invalidate all sessions on password reset
-          $set: { 
+          $set: {
             password: newPassword, // Note: pre-save hook will handle hashing
-            lastPasswordReset: new Date() 
+            lastPasswordReset: new Date()
           }
         },
         { new: true, session }
@@ -361,7 +362,7 @@ class CustomerService {
    */
   async updateProfile(customerId, updateData) {
     Logger.info(`Updating profile for customer: ${customerId}`, { updateData });
-    
+
     // Prevent updating sensitive fields via this method
     const allowedFields = ['name', 'phoneNumber'];
     const filteredUpdate = {};
@@ -372,7 +373,7 @@ class CustomerService {
     });
 
     const customer = await CustomerRepository.updateById(customerId, filteredUpdate);
-    
+
     if (!customer) {
       throw new AppError('Customer not found', HTTP_STATUS.NOT_FOUND);
     }
@@ -386,9 +387,9 @@ class CustomerService {
    */
   async updateStatus(customerId, isActive) {
     Logger.info(`Updating status for customer: ${customerId} to ${isActive ? 'Active' : 'Blocked'}`);
-    
+
     const customer = await CustomerRepository.updateById(customerId, { isActive });
-    
+
     if (!customer) {
       throw new AppError('Customer not found', HTTP_STATUS.NOT_FOUND);
     }
@@ -403,6 +404,36 @@ class CustomerService {
 
     AuditLogger.log(`CUSTOMER_ACCOUNT_${isActive ? 'UNBLOCKED' : 'BLOCKED'}`, 'ADMIN', { customerId });
     return customer;
+  }
+
+  /**
+   * Update Customer Image (Photo)
+   */
+  async updateImage(customerId, file) {
+    const customer = await CustomerRepository.findById(customerId);
+    if (!customer) {
+      throw new AppError('Customer not found', HTTP_STATUS.NOT_FOUND);
+    }
+
+    // Delete old image if exists
+    if (customer.photo && customer.photo.publicId) {
+      await deleteFromCloudinary(customer.photo.publicId);
+    }
+
+    // Upload new image
+    const result = await uploadToCloudinary(file, `customers/${customerId}`);
+
+    const updateData = {
+      photo: {
+        url: result.secure_url,
+        publicId: result.public_id,
+      },
+    };
+
+    const updatedCustomer = await CustomerRepository.updateById(customerId, updateData);
+    AuditLogger.log('CUSTOMER_PHOTO_UPDATED', 'CUSTOMER', { customerId });
+
+    return updatedCustomer.photo;
   }
 
   /**

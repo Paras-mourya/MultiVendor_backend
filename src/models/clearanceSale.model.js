@@ -4,8 +4,12 @@ const clearanceSaleSchema = new mongoose.Schema({
     vendor: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Vendor',
-        required: true,
-        unique: true, // One clearance sale config per vendor
+        required: false, // Null for Admin/In-house sale
+        index: true
+    },
+    isAdmin: {
+        type: Boolean,
+        default: false,
         index: true
     },
     // Configuration
@@ -51,7 +55,10 @@ const clearanceSaleSchema = new mongoose.Schema({
     // SEO / Meta Data
     metaTitle: { type: String, trim: true },
     metaDescription: { type: String, trim: true },
-    metaImage: { type: String }, // Path/URL
+    metaImage: {
+        url: { type: String },
+        publicId: { type: String }
+    },
 
     // Products included in the sale
     products: [{
