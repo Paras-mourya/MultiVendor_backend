@@ -32,7 +32,7 @@ export const protectAll = catchAsync(async (req, res, next) => {
     const decoded = jwt.verify(token, env.JWT_SECRET);
 
     // 2. Try to find user in different collections
-    
+
     // Check Admin/Employee
     if (decoded.role === 'admin' || !decoded.role) {
       const admin = await AdminRepository.findById(decoded.id);
@@ -73,5 +73,43 @@ export const protectAll = catchAsync(async (req, res, next) => {
       throw new AppError('Session expired. Please log in again.', HTTP_STATUS.UNAUTHORIZED);
     }
     throw error;
+  }
+});
+
+/**
+ * Optional Authentication Middleware
+ * Allows both authenticated and guest users
+ * If token exists, validates and attaches user to req
+ * If no token, allows request to proceed (for guest users)
+ */
+export const optionalAuth = catchAsync(async (req, res, next) => {
+  let token;
+
+  // 1. Try to get token from header or cookies
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies?.token) {
+    token = req.cookies.token;
+  }
+
+  // If no token, allow request to proceed (guest user)
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, env.JWT_SECRET);
+
+    // Try to find customer
+    const customer = await CustomerRepository.findById(decoded.id);
+    if (customer && customer.tokenVersion === decoded.version) {
+      req.customer = customer;
+      req.role = 'customer';
+    }
+
+    next();
+  } catch (error) {
+    // If token is invalid/expired, treat as guest user
+    next();
   }
 });
