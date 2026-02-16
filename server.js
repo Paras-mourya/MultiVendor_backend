@@ -164,6 +164,11 @@ const server = app.listen(PORT, () => {
   Logger.info(`🚀 Server running in ${env.NODE_ENV} mode on port ${PORT}`);
 });
 
+// HTTP Keep-Alive Configuration (Experience Developer Best Practice)
+// Keep connections alive to reuse TCP connections = Better Performance
+server.keepAliveTimeout = 65000;  // 65 seconds
+server.headersTimeout = 66000;    // 66 seconds (must be > keepAliveTimeout)
+
 /**
  * GRACEFUL SHUTDOWN
  */
