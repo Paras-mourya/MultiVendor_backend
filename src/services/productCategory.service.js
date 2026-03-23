@@ -44,9 +44,9 @@ class ProductCategoryService {
     return category;
   }
 
-  async getAllCategories(filter = {}) {
+  async getAllCategories(filter = {}, useCache = true) {
     // Multi-layer cache check
-    if (Object.keys(filter).length === 0) {
+    if (useCache && Object.keys(filter).length === 0) {
       // Try L1 first
       const l1Cached = L1Cache.get(CATEGORY_CACHE_KEY);
       if (l1Cached) {
@@ -65,8 +65,8 @@ class ProductCategoryService {
 
     const categories = await ProductCategoryRepository.findAll(filter);
     
-    // Cache only if no filters
-    if (Object.keys(filter).length === 0) {
+    // Cache only if no filters and cache is enabled
+    if (useCache && Object.keys(filter).length === 0) {
       await Cache.set(CATEGORY_CACHE_KEY, categories, 3600);
       L1Cache.set(CATEGORY_CACHE_KEY, categories, 600); // L1: 10min
     }

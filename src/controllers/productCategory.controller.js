@@ -5,7 +5,7 @@ import AppError from '../utils/AppError.js';
 import Cache from '../utils/cache.js';
 
 // Wipe all cached responses for the public category listing endpoint
-const invalidateCategoryCache = () => Cache.delByPattern('response:*product-categories*');
+const invalidateCategoryCache = () => Cache.delByPattern('response:*categories*');
 
 class ProductCategoryController {
   createCategory = async (req, res) => {
@@ -19,7 +19,12 @@ class ProductCategoryController {
   getAllCategories = async (req, res) => {
     const { status } = req.query;
     const filter = status ? { status } : {};
-    const categories = await ProductCategoryService.getAllCategories(filter);
+    
+    // Bypass cache for admin routes
+    const isAdminRequest = req.originalUrl.includes('/admin') || !!req.admin;
+    
+    const categories = await ProductCategoryService.getAllCategories(filter, !isAdminRequest);
+    
     return res.status(HTTP_STATUS.OK).json(
       new ApiResponse(HTTP_STATUS.OK, categories, SUCCESS_MESSAGES.FETCHED)
     );
