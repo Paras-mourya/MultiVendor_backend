@@ -256,7 +256,13 @@ class BlogService {
     
     // If activating, check if category is active
     if (newStatus === 'active') {
+      if (!blog.category || !blog.category._id) {
+        throw new AppError('Blog does not belong to a valid category', HTTP_STATUS.BAD_REQUEST);
+      }
       const category = await BlogCategoryRepository.findById(blog.category._id);
+      if (!category) {
+        throw new AppError('Associated blog category not found', HTTP_STATUS.NOT_FOUND);
+      }
       if (category.status !== 'active') {
         throw new AppError('Cannot activate blog in an inactive category', HTTP_STATUS.BAD_REQUEST, 'INACTIVE_CATEGORY');
       }

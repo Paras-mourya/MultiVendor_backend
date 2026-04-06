@@ -94,20 +94,18 @@ cartSchema.index({ guestId: 1, 'items.product': 1 });
 cartSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Validation: Either customer OR guestId must be present
-cartSchema.pre('save', function (next) {
+cartSchema.pre('save', async function () {
     if (!this.customer && !this.guestId) {
-        return next(new Error('Either customer or guestId must be provided'));
+        throw new Error('Either customer or guestId must be provided');
     }
     if (this.customer && this.guestId) {
-        return next(new Error('Cannot have both customer and guestId'));
+        throw new Error('Cannot have both customer and guestId');
     }
 
     // Set expiry for guest carts (7 days)
     if (this.guestId && !this.expiresAt) {
         this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     }
-
-    next();
 });
 
 // Virtual for total items count

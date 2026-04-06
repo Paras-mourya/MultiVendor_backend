@@ -68,7 +68,12 @@ class BlogController {
   };
 
   toggleStatus = async (req, res) => {
-    const blog = await BlogService.toggleStatus(req.params.id, req.body.status);
+    const blog = await BlogService.toggleStatus(req.params.id, req.body?.status);
+    
+    if (!blog) {
+      throw new AppError('Updated blog not found', HTTP_STATUS.NOT_FOUND);
+    }
+
     return res.status(HTTP_STATUS.OK).json(
       new ApiResponse(HTTP_STATUS.OK, blog, `Blog status changed to ${blog.status}`)
     );

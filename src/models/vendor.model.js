@@ -177,9 +177,9 @@ vendorSchema.index({ _id: 1, tokenVersion: 1 });
 vendorSchema.index({ phoneNumber: 1 });
 
 // Encrypt password
-vendorSchema.pre('save', async function (next) {
+vendorSchema.pre('save', async function () {
   if (!this.isModified('password')) {
-    return next();
+    return;
   }
   this.password = await hashPassword(this.password);
 });
@@ -190,7 +190,7 @@ vendorSchema.methods.matchPassword = async function (enteredPassword) {
 };
 
 // Cascade Delete: Remove all vendor products when vendor is deleted
-vendorSchema.pre('findOneAndDelete', async function (next) {
+vendorSchema.pre('findOneAndDelete', async function () {
   try {
     const vendorId = this.getQuery()._id;
     
@@ -199,9 +199,8 @@ vendorSchema.pre('findOneAndDelete', async function (next) {
     await Product.deleteMany({ vendor: vendorId });
     
     console.log(`Cascade delete: Removed all products for vendor ${vendorId}`);
-    next();
   } catch (error) {
-    next(error);
+    throw error;
   }
 });
 
