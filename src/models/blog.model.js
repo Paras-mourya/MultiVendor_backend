@@ -58,14 +58,14 @@ const blogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Slug generation hook
+
 blogSchema.pre('save', async function () {
   if (this.isModified('title') || !this.slug) {
     this.slug = slugify(this.title, { lower: true, strict: true });
   }
 });
 
-// Indexes
+
 blogSchema.index({ status: 1 });
 blogSchema.index({ category: 1 });
 blogSchema.index({ title: 'text' }); // Search optimization
